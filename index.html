@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wi-Fi 波形產生器：四組二位數的 OFDM 波形</title>
+<style>
+  :root{
+    --bg:#000000; --card:#0c0d0e; --ink:#e8e9ea; --muted:#9aa0a6; --line:#25282b;
+    --grid:#1b1e21; --axis:#4d5258;
+    --c1:#6ea2ff; --c2:#f0a35a; --c3:#55c495; --c4:#e07cc6; --c5:#a891ff;
+    --accent:#6ea2ff; --code:#16181a;
+    --wifi:rgb(0,138,27); --wifi-o:rgb(0,104,183); --rf:rgb(138,141,142);
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:1.55rem;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 22px;font-size:.95rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:20px}
+  h2{font-size:1.15rem;margin:0 0 4px}
+  h2 .tag{font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:2px;
+    background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+  .desc{color:var(--muted);font-size:.9rem;margin:0 0 14px}
+  .inputs{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .num label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
+  .num input{width:84px;font-size:1.6rem;font-weight:700;text-align:center;padding:8px 6px;border-radius:10px;
+    border:2px solid var(--line);background:var(--bg);color:var(--ink);font-family:ui-monospace,Menlo,Consolas,monospace}
+  .num input:focus{outline:none;border-color:var(--accent)}
+  .num:nth-child(1) input{border-bottom-color:var(--c1)}
+  .num:nth-child(2) input{border-bottom-color:var(--c2)}
+  .num:nth-child(3) input{border-bottom-color:var(--c3)}
+  button{font:inherit;font-weight:600;padding:10px 18px;border-radius:10px;border:none;cursor:pointer;
+    background:var(--accent);color:#fff}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .bits{margin-top:14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.95rem;
+    display:flex;flex-wrap:wrap;gap:6px 18px}
+  .bits span b{font-weight:700}
+  pre.f{background:var(--code);border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:.86rem;margin:0 0 14px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre}
+  .chart{width:100%;height:300px;display:block}
+  .chart.tall{height:320px}
+  .row{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+  @media (max-width:760px){.row{grid-template-columns:1fr}}
+  .const{width:100%;aspect-ratio:1/1;display:block;max-width:300px}
+  .toggles{display:flex;flex-wrap:wrap;gap:16px;margin:4px 0 10px;font-size:.88rem;color:var(--muted)}
+  .toggles label{cursor:pointer;user-select:none}
+  table{border-collapse:collapse;width:100%;font-size:.88rem}
+  th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:center}
+  th{color:var(--muted);font-weight:600}
+  td.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .stats{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0 0}
+  .stat{background:var(--code);border-radius:10px;padding:8px 14px;min-width:140px}
+  .stat .k{font-size:.75rem;color:var(--muted)}
+  .stat .v{font-size:1.15rem;font-weight:700;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .ok{color:var(--c3);font-weight:700}
+  .bad{color:#d84a4a;font-weight:700}
+  .note{font-size:.84rem;color:var(--muted);margin-top:10px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;color:var(--muted);margin:2px 0 6px}
+  .legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  .num.live input{width:104px;border-color:var(--c5);color:var(--c5);background:color-mix(in srgb,var(--c5) 8%,transparent)}
+  .ctrl{display:flex;gap:8px;align-items:center}
+  .spd{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--muted);white-space:nowrap}
+  .spd input[type=range]{width:180px;accent-color:var(--wifi);cursor:pointer}
+  .spd span{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink);min-width:6.5ch}
+  .chart.xl{height:440px}
+  .bigval{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:0 0 10px}
+  .bigval .k{font-size:.85rem;color:var(--muted)}
+  .bigval .v{font-size:2rem;font-weight:800;color:var(--c5);font-family:ui-monospace,Menlo,Consolas,monospace;min-width:5.5ch}
+  .bigval .b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;color:var(--muted)}
+  .wrap{display:flex;flex-direction:column}
+  .en{display:none}
+  body.ov .en{display:inline}
+  body.ov .zh{display:none}
+  .spd b{font-weight:400}
+  /* 首頁（波形疊合）精簡模式：只留四個欄位、速度桿、波形圖，分頁列移到最下方 */
+  body.ov h1, body.ov .sub, body.ov .num.live, body.ov #play, body.ov #rand, body.ov #reset,
+  body.ov .bits, body.ov #v-overlay h2, body.ov #v-overlay .desc, body.ov .bigval,
+  body.ov #legO, body.ov #statsO, body.ov #v-overlay .note{display:none}
+  body.ov .spd input[type=range]{accent-color:var(--wifi-o)}
+  .ovonly{display:none !important}
+  body.ov .ovonly{display:flex !important}
+  body.ov .inputs{align-items:center;gap:8px;flex-wrap:nowrap}
+  body.ov .num input{width:54px;font-size:1.2rem;padding:6px 2px}
+  body.ov .ctrl{flex-direction:row;flex-wrap:nowrap;justify-content:space-between;align-items:center;gap:12px 14px}
+  body.ov .ctrl .spd{gap:8px}
+  .ctrlbar{padding:14px 22px}
+  .ctrlbar:empty{display:none}
+  body.ov .spd input[type=range]{width:96px}
+  body.ov .grp2 .auto2, body.ov .grp2 .rng{display:none}
+  body.ov .spd > span{min-width:5ch}
+  .grp2{gap:8px;margin-left:auto}
+  .wavebtn{align-self:center;white-space:nowrap;background:transparent;color:var(--muted);border:1px solid var(--line);
+    border-radius:999px;padding:9px 18px;font-size:.9rem}
+  .wavebtn.on{background:rgb(0,120,220);color:#fff;border-color:rgb(0,150,255)}
+  .grp2 .num input{border-bottom-color:var(--w2) !important}
+  .rng{display:flex;flex-direction:column;gap:4px;align-self:flex-end}
+  .rng label{display:flex;align-items:center;gap:6px;font-size:.75rem;color:var(--muted)}
+  .rng input{width:54px;font:600 .85rem ui-monospace,Menlo,Consolas,monospace;text-align:center;padding:3px 4px;
+    border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+  .rng input:focus{outline:none;border-color:var(--w2)}
+  body.ov .grp2 .auto2 input{width:66px;color:var(--w2);border-color:var(--w2);
+    background:color-mix(in srgb,var(--w2) 10%,transparent)}
+  .hueBar{-webkit-appearance:none;appearance:none;height:8px;border-radius:4px;outline:none;
+    background:linear-gradient(to right,hsl(0,80%,58%) 0%,hsl(60,80%,58%) 15.8%,hsl(120,80%,58%) 31.6%,hsl(180,80%,58%) 47.4%,hsl(240,80%,58%) 63.2%,hsl(300,80%,58%) 78.9%,hsl(359,80%,58%) 94.4%,#fff 95.5%,#fff 100%)}
+  .hueBar::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--tc,var(--w2));border:2px solid #fff;cursor:pointer}
+  .hueBar::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--tc,var(--w2));border:2px solid #fff;cursor:pointer}
+  .sw{display:inline-block;width:30px;height:12px;border-radius:3px;background:var(--w2);vertical-align:middle}
+  @media (max-width:980px){body.ov .inputs, body.ov .ctrl{flex-wrap:wrap}}
+  body.ov .tabs{order:10;margin:4px 0 0;border-bottom:none;border-top:1px solid var(--line)}
+  body.ov .tabs a{border-bottom:none;border-top:3px solid transparent;margin:-1px 0 0}
+  body.ov .tabs a.on{border-top-color:var(--accent)}
+  .tabs{display:flex;gap:6px;margin:0 0 18px;border-bottom:1px solid var(--line)}
+  .tabs a{padding:10px 18px;text-decoration:none;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;margin-bottom:-1px}
+  .tabs a.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .view{display:none}
+  .view.on{display:block}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:760px){.twocol{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Wi-Fi 波形產生器</h1>
+  <p class="sub">輸入四組二位數（00–99），第 5 組為自動變動的數值（0.01–23.99），Wi-Fi 波形會隨之即時變化。子載波間距 Δf = 312.5 kHz，一個 OFDM 符號 T = 3.2 μs（802.11a/g/n，20 MHz 頻寬）。</p>
+
+  <div class="card">
+    <div class="inputs">
+      <div class="num"><label><span class="zh">第 1 組</span><span class="en">Cent.</span></label><input id="n0" inputmode="numeric" maxlength="2" value="19"></div>
+      <div class="num"><label><span class="zh">第 2 組</span><span class="en">Y.</span></label><input id="n1" inputmode="numeric" maxlength="2" value="87"></div>
+      <div class="num"><label><span class="zh">第 3 組</span><span class="en">M.</span></label><input id="n2" inputmode="numeric" maxlength="2" value="10"></div>
+      <div class="num"><label><span class="zh">第 4 組</span><span class="en">D.</span></label><input id="n3" inputmode="numeric" maxlength="2" value="21"></div>
+      <div class="num live"><label>第 5 組（自動）</label><input id="n4" readonly value="00.01" tabindex="-1"></div>
+      <div class="ctrl">
+        <button id="play" class="ghost" title="播放／暫停">⏸ 暫停</button>
+        <label class="spd"><span class="zh">速度</span><span class="en">Speed</span>
+          <input type="range" id="speed" min="0" max="60" step="1" value="5">
+          <span><b id="spdn">5</b><span class="zh"> 次/秒</span><span class="en"> /s</span></span></label>
+        <label class="spd ovonly">Color
+          <input type="range" id="hue" class="hueBar" min="0" max="380" step="1" value="380">
+          <span><i id="sw" class="sw"></i></span></label>
+        <label class="spd ovonly">Upper
+          <input type="range" id="hueU" class="hueBar cb" min="0" max="100" step="1" value="10">
+          <span><i id="swU" class="sw"></i></span></label>
+        <label class="spd ovonly">Lower
+          <input type="range" id="hueL" class="hueBar cb" min="0" max="100" step="1" value="60">
+          <span><i id="swL" class="sw"></i></span></label>
+        <button id="waveBtn" class="wavebtn ovonly">📶 Signal Mode</button>
+      </div>
+      <button id="rand">🎲 隨機產生</button>
+      <button id="reset" class="ghost">還原 19, 87, 10, 21</button>
+      <div class="grp2 ovonly">
+        <div class="num"><label>Cent.</label><input id="m0" inputmode="numeric" maxlength="2"></div>
+        <div class="num"><label>Y.</label><input id="m1" inputmode="numeric" maxlength="2"></div>
+        <div class="num"><label>M.</label><input id="m2" inputmode="numeric" maxlength="2"></div>
+        <div class="num"><label>D.</label><input id="m3" inputmode="numeric" maxlength="2"></div>
+        <div class="num auto2"><label>Auto</label><input id="m4" readonly tabindex="-1" value="0.01"></div>
+        <div class="rng">
+          <label>Max<input id="hi2" inputmode="decimal" maxlength="5" value="23.99"></label>
+          <label>Min<input id="lo2" inputmode="decimal" maxlength="5" value="0.01"></label>
+        </div>
+      </div>
+    </div>
+    <div class="bits" id="bits"></div>
+  </div>
+
+  <nav class="tabs">
+    <a href="#overlay" data-view="overlay"><span class="zh">① 波形疊合（動態）</span><span class="en">① Waveform Overlay (Live)</span></a>
+    <a href="#waveforms" data-view="waveforms"><span class="zh">② 波形總覽</span><span class="en">② Waveform Overview</span></a>
+    <a href="#formulas" data-view="formulas"><span class="zh">③ 波形與公式對照</span><span class="en">③ Waveforms &amp; Formulas</span></a>
+  </nav>
+
+  <section id="v-overlay" class="view">
+    <div class="card">
+      <h2>Wi-Fi 基頻與射頻輸出疊合<span class="tag">即時動態</span></h2>
+      <p class="desc">同一個符號時間（0–3.2 μs）內，把 16-QAM + OFDM 基頻 I(t)、Q(t) 與射頻輸出 x(t) 疊在一起，三者使用相同的振幅尺度。射頻的包絡線 |s(t)| = √(I² + Q²)，會剛好包住基頻波形的外緣。</p>
+      <div class="bigval"><span class="k">第 5 組目前數值</span><span class="v" id="bigv">0.01</span><span class="b" id="bigb"></span></div>
+      <div class="legend" id="legO"></div>
+      <canvas class="chart xl" id="cO"></canvas>
+      <div class="stats" id="statsO"></div>
+      <p class="note">觀察重點：第 5 組每次只變動 0.01，但只要有位元翻轉，對應的 16-QAM 符號就會跳到另一個星座點，整個波形隨之「跳動」，而不是平滑漸變。這正是數位調變的特性：資料是離散的。</p>
+    </div>
+    <div class="card ctrlbar" id="ctrlSlot"></div>
+  </section>
+
+  <section id="v-waveforms" class="view">
+    <div class="card">
+      <h2>A. 接近真實 Wi-Fi<span class="tag">16-QAM + OFDM</span></h2>
+      <p class="desc">44 bits 映射成 11 個 16-QAM 符號，經 IFFT 合成的基頻波形；前段灰底為 0.8 μs 保護區間。</p>
+      <div class="legend" id="legB1"></div>
+      <canvas class="chart tall" id="cB1"></canvas>
+    </div>
+    <div class="card">
+      <h2>B. 射頻輸出<span class="tag">天線發射的訊號</span></h2>
+      <p class="desc">基頻 I/Q 調變到載波上；虛線為包絡 |s(t)|。載波以 12.5 MHz 示意（實際為 2.4 / 5 GHz）。</p>
+      <div class="legend" id="legR1"></div>
+      <canvas class="chart" id="cR1"></canvas>
+    </div>
+  </section>
+
+  <section id="v-formulas" class="view">
+
+  <!-- B -->
+  <div class="card">
+    <h2>A. 接近真實 Wi-Fi<span class="tag">16-QAM + OFDM</span></h2>
+    <p class="desc">四組二位數各轉成 8 bits；第 5 組乘以 100 後（1–2399）轉成 12 bits，合計 44 bits。每 4 bit 依 802.11 格雷碼映射成一個 16-QAM 複數符號 Xₖ = Iₖ + jQₖ（前 2 bit 決定 I，後 2 bit 決定 Q：00→−3、01→−1、11→+1、10→+3），放到第 1～11 個子載波，再以 IFFT 合成。</p>
+    <div class="row">
+      <div>
+        <canvas class="const" id="cC"></canvas>
+        <div class="note">16-QAM 星座圖：實心點為本次使用的符號，數字為子載波編號 k。</div>
+      </div>
+      <div><table id="mapB"></table></div>
+    </div>
+    <pre class="f" id="fB" style="margin-top:16px"></pre>
+    <div class="toggles">
+      <label><input type="checkbox" id="showQ" checked> 顯示 Q 通道</label>
+      <label><input type="checkbox" id="showEnv"> 顯示包絡 |s(t)|</label>
+      <label><input type="checkbox" id="showCP" checked> 加上保護區間（CP 0.8 μs）</label>
+    </div>
+    <div class="legend" id="legB"></div>
+    <canvas class="chart tall" id="cB"></canvas>
+    <div class="stats" id="statsB"></div>
+
+    <h3 style="font-size:1rem;margin:20px 0 6px">射頻輸出 x(t) = I(t)·cos(2πf꜀t) − Q(t)·sin(2πf꜀t)</h3>
+    <p class="desc" style="margin-bottom:6px">真實載波 f꜀ = 2.4 GHz，在 3.2 μs 內會振盪約 7,680 次，畫不出來。這裡用 f꜀ = 12.5 MHz（每個符號 40 個週期）示意：基頻波形就是射頻訊號的包絡線。</p>
+    <canvas class="chart" id="cR"></canvas>
+
+    <h3 style="font-size:1rem;margin:18px 0 6px">接收端解調：FFT → 判定星座點 → 還原位元 → 還原數字</h3>
+    <table id="decB"></table>
+    <p class="note">簡化說明：真實 802.11 還會經過擾碼、卷積編碼、交錯、插入 4 個導頻、64 點 IFFT 及前導碼，並以 1/√10 正規化 16-QAM 功率，因此空中實際波形會不同。本頁保留最核心的「QAM 映射 + IFFT」步驟。</p>
+  </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  const T = 3.2;               // μs
+  const CP = 0.8;              // μs
+  const DF = 312.5;            // kHz
+  const qamMap = {"00":-3,"01":-1,"11":1,"10":3};
+  const qamInv = {"-3":"00","-1":"01","1":"11","3":"10"};
+  const DIG=[2,2,2,2], BITS=[8,8,8,8,12], MAXV=[99,99,99,99];
+  const OWNER=[0,0,1,1,2,2,3,3,4,4,4];   // 子載波屬於第幾組（第 5 組佔 3 個）
+  let cents = 1, cents2 = 1;                          // 第 5 組 = cents/100，1 ~ 2399
+  const inputs = [0,1,2,3].map(i=>document.getElementById('n'+i));
+  const $ = id=>document.getElementById(id);
+
+  function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+  function colors(){return {c:[css('--c1'),css('--c2'),css('--c3'),css('--c4'),css('--c5')],
+    ink:css('--ink'),wifi:css('--wifi'),wifiO:css('--wifi-o'),rf:css('--rf'),muted:css('--muted'),grid:css('--grid'),axis:css('--axis'),line:css('--line'),card:css('--card')};}
+
+  function readNums(){
+    const a = inputs.map(el=>{
+      let v = parseInt(el.value.replace(/\D/g,''),10);
+      if (isNaN(v)) v = 0;
+      return Math.max(0,Math.min(MAXV[inputs.indexOf(el)],v));
+    });
+    a.push(cents/100);
+    return a;
+  }
+  const padN = (n,i)=> i===4 ? n.toFixed(2) : String(n).padStart(DIG[i],'0');
+  const toInt = (n,i)=> i===4 ? Math.round(n*100) : n;
+  const same = (a,b,i)=> toInt(a,i)===toInt(b,i);
+  const fmt = (x,d=1)=>{const s=x.toFixed(d); return s==='-0.0'||s==='-0.00'?(0).toFixed(d):s;};
+  const cfmt = (I,Q)=>`${I}${Q<0?' − ':' + '}${Math.abs(Q)}j`;
+
+  // ---------- plotting ----------
+  function setupCanvas(cv){
+    const dpr = window.devicePixelRatio||1;
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+    return {ctx,w:r.width,h:r.height};
+  }
+  function niceStep(range){
+    const raw = range/6, p = Math.pow(10,Math.floor(Math.log10(raw))), m = raw/p;
+    return (m<1.5?1:m<3?2:m<7?5:10)*p;
+  }
+  function plot(cv, series, o){
+    const C = colors();
+    const {ctx,w,h} = setupCanvas(cv);
+    const L=52,R=14,Tp=12,B=38;
+    const pw=w-L-R, ph=h-Tp-B;
+    let ymin=Infinity,ymax=-Infinity;
+    series.forEach(s=>s.pts.forEach(p=>{if(p[1]<ymin)ymin=p[1]; if(p[1]>ymax)ymax=p[1];}));
+    let ys;
+    if(o.ymin!==undefined){ymin=o.ymin; ymax=o.ymax; ys=o.ystep;}
+    else{const span = Math.max(ymax-ymin,1); ymin-=span*0.08; ymax+=span*0.08;
+    ys = niceStep(ymax-ymin); ymin=Math.floor(ymin/ys)*ys; ymax=Math.ceil(ymax/ys)*ys;}
+    const X=x=>L+(x-o.xmin)/(o.xmax-o.xmin)*pw, Y=y=>Tp+(ymax-y)/(ymax-ymin)*ph;
+    ctx.clearRect(0,0,w,h);
+    // 曲線上方／下方填色
+    (o.fills||[]).forEach(f=>{
+      const edge = f.to==='top'?Tp:Tp+ph;
+      ctx.save(); ctx.beginPath(); ctx.rect(L,Tp,pw,ph); ctx.clip();
+      ctx.beginPath(); ctx.moveTo(X(f.pts[0][0]),edge);
+      f.pts.forEach(p=>ctx.lineTo(X(p[0]),Y(p[1])));
+      ctx.lineTo(X(f.pts[f.pts.length-1][0]),edge); ctx.closePath();
+      ctx.fillStyle=f.color; ctx.fill(); ctx.restore();
+    });
+    // 包絡範圍填色（上下兩條曲線之間）
+    (o.bands||[]).forEach(b=>{
+      ctx.save(); ctx.beginPath(); ctx.rect(L,Tp,pw,ph); ctx.clip(); ctx.beginPath();
+      b.upper.forEach((p,i)=>{const px=X(p[0]),py=Y(p[1]); i?ctx.lineTo(px,py):ctx.moveTo(px,py);});
+      for(let i=b.lower.length-1;i>=0;i--) ctx.lineTo(X(b.lower[i][0]),Y(b.lower[i][1]));
+      ctx.closePath(); ctx.fillStyle=b.color; ctx.fill(); ctx.restore();
+    });
+    // shaded regions
+    (o.shade||[]).forEach(s=>{
+      ctx.fillStyle=s.color; ctx.fillRect(X(s.x0),Tp,X(s.x1)-X(s.x0),ph);
+      ctx.fillStyle=C.muted; ctx.font='12px system-ui,sans-serif'; ctx.textAlign='center';
+      ctx.fillText(s.label,(X(s.x0)+X(s.x1))/2,Tp+14);
+    });
+    // grid
+    ctx.font='11px ui-monospace,Menlo,monospace'; ctx.fillStyle=C.muted; ctx.lineWidth=1;
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    for(let y=ymin;y<=ymax+1e-9;y+=ys){
+      if(!o.noGrid || (Math.abs(y)<1e-9 && !o.noZero)){ ctx.strokeStyle = Math.abs(y)<1e-9?C.axis:C.grid;
+      ctx.beginPath(); ctx.moveTo(L,Y(y)); ctx.lineTo(L+pw,Y(y)); ctx.stroke(); }
+      ctx.fillText(fmt(y,ys<1?1:0),L-6,Y(y));
+    }
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    const xs=o.xstep||0.4;
+    for(let x=Math.ceil(o.xmin/xs-1e-9)*xs;x<=o.xmax+1e-9;x+=xs){
+      if(!o.noGrid){ ctx.strokeStyle=C.grid; ctx.beginPath(); ctx.moveTo(X(x),Tp); ctx.lineTo(X(x),Tp+ph); ctx.stroke(); }
+      ctx.fillText(fmt(x,1),X(x),Tp+ph+6);
+    }
+    if(o.xlabel!==null) ctx.fillText(o.xlabel||'時間 (μs)',L+pw/2,Tp+ph+22);
+    (o.vlines||[]).forEach(v=>{
+      ctx.strokeStyle=C.axis; ctx.setLineDash([4,4]); ctx.beginPath();
+      ctx.moveTo(X(v),Tp); ctx.lineTo(X(v),Tp+ph); ctx.stroke(); ctx.setLineDash([]);
+    });
+    // series
+    series.forEach(s=>{
+      ctx.strokeStyle=s.color; ctx.lineWidth=s.width||2; ctx.globalAlpha=s.alpha||1;
+      ctx.setLineDash(s.dash||[]); ctx.beginPath();
+      s.pts.forEach((p,i)=>{const px=X(p[0]),py=Y(p[1]); i?ctx.lineTo(px,py):ctx.moveTo(px,py);});
+      ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+    });
+    // markers
+    (o.marks||[]).forEach(m=>{
+      ctx.fillStyle=m.color; ctx.beginPath(); ctx.arc(X(m.x),Y(m.y),4,0,Math.PI*2); ctx.fill();
+      ctx.font='600 12px system-ui,sans-serif'; ctx.textAlign=m.align||'left'; ctx.textBaseline='bottom';
+      ctx.fillText(m.label,X(m.x)+(m.align==='right'?-7:7),Y(m.y)-4);
+    });
+  }
+  function legend(el, items){
+    el.innerHTML = items.map(i=>`<span><i style="background:${i.color};${i.dash?'background:repeating-linear-gradient(90deg,'+i.color+' 0 4px,transparent 4px 7px)':''}"></i>${i.label}</span>`).join('');
+  }
+
+  // ---------- math ----------
+  const N = 640;
+  function sampleA(a){
+    const pts=[], comps=a.map(()=>[]);
+    for(let i=0;i<=N;i++){
+      const t=T*i/N; let y=0;
+      a.forEach((ak,k)=>{const v=ak*Math.cos(2*Math.PI*(k+1)*t/T); comps[k].push([t,v]); y+=v;});
+      pts.push([t,y]);
+    }
+    return {pts,comps};
+  }
+  function sB(X,t){
+    let I=0,Q=0;
+    X.forEach((x,k)=>{const ph=2*Math.PI*(k+1)*t/T, c=Math.cos(ph), s=Math.sin(ph);
+      I+=x[0]*c - x[1]*s; Q+=x[0]*s + x[1]*c;});
+    return [I,Q];
+  }
+
+  // ---------- render ----------
+  let view='overlay';
+  const inputs2=[0,1,2,3].map(i=>$('m'+i));
+  (function(){const d=new Date(); const v=[20,d.getFullYear()%100,d.getMonth()+1,d.getDate()];
+    inputs2.forEach((el,i)=>el.value=String(v[i]).padStart(2,'0'));})();
+  function hueColor(){const v=+$('hue').value; return v>=360?'#ffffff':`hsl(${v},85%,58%)`;}
+  // 上方填色：hsl(h,100%,40.2%)，預設 h=240 即 rgb(0,0,205)；下方填色：hsl(h,100%,25.1%)，預設即 rgb(0,0,128)
+  // 青～藍色帶（含白色）：0–20 白→青，20–100 青(180°)→藍(240°)；滑桿最右端 = 預設 rgb(0,0,205) / rgb(0,0,128)
+  function hsl2rgb(h,S,Lt){h/=360;S/=100;Lt/=100;const q=Lt<.5?Lt*(1+S):Lt+S-Lt*S,p=2*Lt-q;
+    const f=t=>{t=(t+1)%1;return t<1/6?p+(q-p)*6*t:t<.5?q:t<2/3?p+(q-p)*(2/3-t)*6:p;};
+    return [f(h+1/3),f(h),f(h-1/3)].map(v=>Math.round(v*255));}
+  // 0 白 → 10 淡青 rgb(224,255,255) → 20 青 → 100 藍
+  const LC=[224,255,255];
+  function cyanBlue(v,Lt){
+    if(v>=20){const c=hsl2rgb(180+(v-20)/80*60,100,Lt); return `rgb(${c})`;}
+    if(v<=10){const t=v/10; return `rgb(${LC.map(x=>Math.round(255+(x-255)*t))})`;}
+    const c=hsl2rgb(180,100,Lt), t=(v-10)/10; return `rgb(${LC.map((x,i)=>Math.round(x+(c[i]-x)*t))})`;}
+  // Lower 色帶：白 → 淡青 → 青 → 預設 rgb(24,116,205)（滑桿 60）→ 深藍 rgb(0,0,128)
+  const LSTOPS=[[0,[255,255,255]],[10,[224,255,255]],[20,[0,128,128]],[60,[24,116,205]],[100,[0,0,128]]];
+  function lowerColor(v){
+    for(let i=1;i<LSTOPS.length;i++){const [v1,c1]=LSTOPS[i]; if(v<=v1){const [v0,c0]=LSTOPS[i-1], t=(v-v0)/(v1-v0);
+      return `rgb(${c0.map((x,j)=>Math.round(x+(c1[j]-x)*t))})`;}}
+    return 'rgb(0,0,128)';}
+  const fillU=()=>cyanBlue(+$('hueU').value,40.2), fillL=()=>lowerColor(+$('hueL').value);
+  $('hueL').style.background='linear-gradient(to right,'+LSTOPS.map(([v,c])=>`rgb(${c}) ${v}%`).join(',')+')';
+  [['hueU',40.2]].forEach(([id,Lt])=>{$(id).style.background=
+    `linear-gradient(to right,#fff 0%,${cyanBlue(10,Lt)} 10%,${cyanBlue(20,Lt)} 20%,${cyanBlue(60,Lt)} 60%,${cyanBlue(100,Lt)} 100%)`;});
+  function setHue(){const c=hueColor(); document.documentElement.style.setProperty('--w2',c);
+    const u=fillU(), l=fillL();
+    $('swU').style.background=u; $('hueU').style.setProperty('--tc',u);
+    $('swL').style.background=l; $('hueL').style.setProperty('--tc',l);}
+  function buildX(vals,widths){
+    const bits=vals.map((v,i)=>v.toString(2).padStart(widths[i],'0')).join(''), X=[];
+    for(let i=0;i<bits.length;i+=4){const b=bits.slice(i,i+4); X.push([qamMap[b.slice(0,2)],qamMap[b.slice(2)]]);}
+    return X;
+  }
+  // ===== 首頁疊合圖（一般模式／海浪模式）=====
+  let ovState=null, waveMode=true, wavePh=[0,0,0,0], lastTs=null, rafId=null;
+  const WAVE1_DUR=8;   // 第一條波形（基頻＋射頻）流動一圈秒數
+  const WAVE_LAYERS=[{dur:10,dy:0,color:'rgba(0, 150, 255, 0.4)'},{dur:7,dy:-6,color:'rgba(0, 120, 220, 0.6)'},{dur:5,dy:-12,color:'rgba(0, 90, 190, 0.9)'}];
+  function drawOverlay(){
+    if(!ovState) return;
+    const {rf,e1,e2,oI,oQ,pI,pQ,X,X2,C}=ovState, w2=hueColor();
+    const top=[
+      {pts:rf,color:'rgba(135, 206, 250, 0.2)',width:1},
+      {pts:e1,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]},{pts:e2,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]}];
+    const first=[{pts:oQ,color:C.wifiO,width:1.8,dash:[6,4],alpha:.8},{pts:oI,color:C.wifiO,width:2.8,alpha:.8}];
+    const opt={xmin:0,xmax:T,xstep:0.4,ymin:-40,ymax:40,ystep:10,xlabel:null,noGrid:true,noZero:true,
+      bands:[{upper:e1,lower:e2,color:'rgba(135, 206, 250, 0.8)'}]};
+    if(!waveMode){
+      opt.fills=[{pts:pI,to:'top',color:fillU()},{pts:pI,to:'bottom',color:fillL()}];
+      plot($('cO'),top.concat([{pts:pQ,color:w2,width:1.6,dash:[6,4],alpha:.85},{pts:pI,color:w2,width:2.4,alpha:.95}],first),opt);
+      return;
+    }
+    // 海浪模式：第二條波形只取第 1、2 個子載波（平滑），相位隨時間連續旋轉 = 水平流動；三層不同速度、透明度與高度
+    const lowX=X2.slice(0,2), N=320;
+    const w=(t)=>lowX.reduce((s,x,k)=>{const ph=2*Math.PI*(k+1)*t/T; return s+x[0]*Math.cos(ph)-x[1]*Math.sin(ph);},0);
+    let mx=0; for(let i=0;i<N;i++) mx=Math.max(mx,Math.abs(w(T*i/N)));
+    const sc=10/(mx||1);
+    opt.fills=[{pts:[[0,-40],[T,-40]],to:'top',color:fillU()}].concat(WAVE_LAYERS.map((Ly,li)=>{
+      const pts=[]; for(let i=0;i<=N;i++){const t=T*i/N; pts.push([t, w(t+wavePh[li])*sc + Ly.dy]);}
+      return {pts,to:'bottom',color:Ly.color};}));
+    // 第一條波形也改為海浪模式：取第 1、2 個子載波，基頻 I/Q、射頻與包絡帶一起水平流動
+    const lo1=X.slice(0,2), ph1=wavePh[3];
+    const s1=(t)=>{let I=0,Q=0; lo1.forEach((x,k)=>{const ph=2*Math.PI*(k+1)*t/T,c=Math.cos(ph),sn=Math.sin(ph);
+      I+=x[0]*c-x[1]*sn; Q+=x[0]*sn+x[1]*c;}); return [I,Q];};
+    let m1=0; for(let i=0;i<N;i++){const v=s1(T*i/N); m1=Math.max(m1,Math.hypot(v[0],v[1]));}
+    const k1=12/(m1||1), wI=[], wQ=[], wU=[], wL=[], wR=[], NR=2000;
+    for(let i=0;i<=N;i++){const t=T*i/N, v=s1(t+ph1), m=Math.hypot(v[0],v[1])*k1;
+      wI.push([t,v[0]*k1]); wQ.push([t,v[1]*k1]); wU.push([t,m]); wL.push([t,-m]);}
+    for(let i=0;i<=NR;i++){const t=T*i/NR, tt=t+ph1, v=s1(tt), c=2*Math.PI*40*tt/T;
+      wR.push([t,(v[0]*Math.cos(c)-v[1]*Math.sin(c))*k1]);}
+    opt.bands=[{upper:wU,lower:wL,color:'rgba(135, 206, 250, 0.8)'}];
+    plot($('cO'),[
+      {pts:wR,color:'rgba(135, 206, 250, 0.2)',width:1},
+      {pts:wU,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]},{pts:wL,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]},
+      {pts:wQ,color:C.wifiO,width:1.8,dash:[6,4],alpha:.8},{pts:wI,color:C.wifiO,width:2.8,alpha:.8}],opt);
+  }
+  function waveLoop(ts){
+    rafId=null;
+    if(!waveMode || view!=='overlay'){lastTs=null; return;}
+    const dt = lastTs===null?0:Math.min(0.1,(ts-lastTs)/1000); lastTs=ts;
+    const f = (+$('speed').value)/5;           // Speed 5 = SVG 原速；0 = 靜止
+    WAVE_LAYERS.forEach((Ly,i)=>{ wavePh[i]=(wavePh[i]+dt*f*T/Ly.dur)%T; });
+    wavePh[3]=(wavePh[3]+dt*f*T/WAVE1_DUR)%T;
+    drawOverlay();
+    rafId=requestAnimationFrame(waveLoop);
+  }
+  function startWave(){ if(waveMode && view==='overlay' && rafId===null){ lastTs=null; rafId=requestAnimationFrame(waveLoop);} }
+
+  function render(){
+    const C = colors();
+    const nums = readNums();
+    const bitStr = nums.map((n,i)=>toInt(n,i).toString(2).padStart(BITS[i],'0'));
+    $('bits').innerHTML = nums.map((n,i)=>`<span style="color:${C.c[i]}"><b>${padN(n,i)}</b>${i===4?' ×100 = '+toInt(n,i):''} → ${bitStr[i].match(/.{4}/g).join(' ')}</span>`).join('');
+
+    // ===== B =====
+    const allBits = bitStr.join('');
+    const X=[], nib=[];
+    for(let i=0;i<allBits.length;i+=4){const b=allBits.slice(i,i+4); nib.push(b); X.push([qamMap[b.slice(0,2)],qamMap[b.slice(2)]]);}
+    $('mapB').innerHTML = `<tr><th>數字</th><th>4 bit</th><th>I（b₀b₁）</th><th>Q（b₂b₃）</th><th>符號 Xₖ</th><th>子載波</th></tr>`+
+      X.map((x,k)=>{const ni=OWNER[k], first=OWNER.indexOf(ni)===k, span=OWNER.filter(o=>o===ni).length;
+        return `<tr>${first?`<td rowspan="${span}" class="mono" style="color:${C.c[ni]};font-weight:700">${padN(nums[ni],ni)}</td>`:''}
+        <td class="mono">${nib[k]}</td><td class="mono">${nib[k].slice(0,2)} → ${x[0]>0?'+':''}${x[0]}</td>
+        <td class="mono">${nib[k].slice(2)} → ${x[1]>0?'+':''}${x[1]}</td><td class="mono">${cfmt(x[0],x[1])}</td><td>k=${k+1}</td></tr>`;}).join('');
+
+    // constellation
+    (function(){
+      const cv=$('cC'); const {ctx,w,h}=setupCanvas(cv);
+      const pad=34, S=Math.min(w,h)-pad*2, cx=w/2, cy=h/2, u=S/8;
+      ctx.clearRect(0,0,w,h);
+      ctx.strokeStyle=C.grid; ctx.lineWidth=1;
+      [-2,0,2].forEach(v=>{ctx.beginPath();ctx.moveTo(cx+v*u,pad-6);ctx.lineTo(cx+v*u,h-pad+6);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(pad-6,cy-v*u);ctx.lineTo(w-pad+6,cy-v*u);ctx.stroke();});
+      ctx.strokeStyle=C.axis; ctx.beginPath(); ctx.moveTo(pad-10,cy); ctx.lineTo(w-pad+10,cy); ctx.moveTo(cx,pad-10); ctx.lineTo(cx,h-pad+10); ctx.stroke();
+      ctx.fillStyle=C.muted; ctx.font='11px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
+      [-3,-1,1,3].forEach(v=>{ctx.fillText(v,cx+v*u,h-pad+10); });
+      ctx.textAlign='right'; ctx.textBaseline='middle';
+      [-3,-1,1,3].forEach(v=>{ctx.fillText(v,pad-12,cy-v*u);});
+      ctx.textAlign='left'; ctx.fillText('I',w-pad+12,cy); ctx.textAlign='center'; ctx.fillText('Q',cx,pad-18);
+      const used={}; X.forEach((x,k)=>{const key=x.join(','); (used[key]=used[key]||[]).push(k);});
+      [-3,-1,1,3].forEach(i=>[-3,-1,1,3].forEach(q=>{
+        const px=cx+i*u, py=cy-q*u, key=i+','+q;
+        ctx.font='9px ui-monospace,monospace'; ctx.fillStyle=C.muted; ctx.textAlign='center'; ctx.textBaseline='top';
+        ctx.fillText(qamInv[i]+qamInv[q],px,py+8);
+        if(used[key]){
+          const ni=OWNER[used[key][0]];
+          ctx.fillStyle=C.c[ni]; ctx.beginPath(); ctx.arc(px,py,6.5,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle=C.ink; ctx.font='600 11px system-ui,sans-serif'; ctx.textBaseline='bottom';
+          ctx.fillText(used[key].map(k=>k+1).join(','),px,py-8);
+        } else {
+          ctx.strokeStyle=C.axis; ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2); ctx.stroke();
+        }
+      }));
+    })();
+
+    $('fB').textContent =
+`s(t) = Σ Xₖ · e^(j2π·k·Δf·t)        k = 1 ~ 11
+
+I(t) = Re{s(t)} = Σ [ Iₖ·cos(2πkΔf·t) − Qₖ·sin(2πkΔf·t) ]
+     = ${X.map((x,k)=>`${x[0]<0?'−':'+'} ${Math.abs(x[0])}cos(${k+1}ωt) ${x[1]<0?'+':'−'} ${Math.abs(x[1])}sin(${k+1}ωt)`).reduce((s,v,i)=>s+(i&&i%4===0?'\n       ':' ')+v,'').trim().replace(/^\+ /,'')}
+
+Q(t) = Im{s(t)} = Σ [ Iₖ·sin(2πkΔf·t) + Qₖ·cos(2πkΔf·t) ]      （ω = 2πΔf）`;
+
+    const useCP=$('showCP').checked, showQ=$('showQ').checked, showEnv=$('showEnv').checked;
+    const t0 = useCP?-CP:0;
+    const nB = useCP?800:640;
+    const ptsI=[],ptsQ=[],env=[],envN=[];
+    let peak=0,peakT=0,pow=0,cnt=0;
+    for(let i=0;i<=nB;i++){
+      const t=t0+(T-t0)*i/nB;
+      const tt = t<0? t+T : t;   // cyclic prefix = copy of the tail
+      const [I,Q]=sB(X,tt);
+      ptsI.push([t,I]); ptsQ.push([t,Q]);
+      const m=Math.hypot(I,Q); env.push([t,m]); envN.push([t,-m]);
+      if(t>=0){ if(m>peak){peak=m;peakT=t;} pow+=m*m; cnt++; }
+    }
+    const avgP = X.reduce((s,x)=>s+x[0]*x[0]+x[1]*x[1],0);
+    const papr = 10*Math.log10(peak*peak/avgP);
+    const serB=[];
+    if(showEnv){serB.push({pts:env,color:C.muted,width:1.2,dash:[3,3]}); serB.push({pts:envN,color:C.muted,width:1.2,dash:[3,3]});}
+    if(showQ) serB.push({pts:ptsQ,color:C.wifi,width:1.6,dash:[6,4],alpha:.7});
+    serB.push({pts:ptsI,color:C.wifi,width:2.4});
+    const shade = useCP?[
+      {x0:-CP,x1:0,label:'CP（複製尾段）',color:'color-mix(in srgb, '+C.c[4]+' 14%, transparent)'},
+      {x0:T-CP,x1:T,label:'被複製的尾段',color:'color-mix(in srgb, '+C.c[4]+' 7%, transparent)'}]:[];
+    plot($('cB'),serB,{xmin:t0,xmax:T,xstep:0.4,shade,vlines:useCP?[0]:[]});
+    const lb=[{label:'I(t) 同相通道',color:C.wifi}];
+    if(showQ) lb.push({label:'Q(t) 正交通道',color:C.wifi,dash:true});
+    if(showEnv) lb.push({label:'包絡 ±|s(t)|',color:C.muted,dash:true});
+    legend($('legB'),lb);
+    $('statsB').innerHTML = `
+      <div class="stat"><div class="k">包絡峰值 |s|max</div><div class="v">${fmt(peak,2)}</div></div>
+      <div class="stat"><div class="k">發生時間</div><div class="v">${fmt(peakT,2)} μs</div></div>
+      <div class="stat"><div class="k">平均功率 Σ|Xₖ|²</div><div class="v">${avgP}</div></div>
+      <div class="stat"><div class="k">PAPR 峰均功率比</div><div class="v">${fmt(papr,2)} dB</div></div>
+      <div class="stat"><div class="k">符號總長</div><div class="v">${useCP?'4.0':'3.2'} μs</div></div>`;
+
+    // RF
+    const fcCycles=40, rf=[], e1=[], e2=[];
+    for(let i=0;i<=4000;i++){
+      const t=T*i/4000, [I,Q]=sB(X,t), ph=2*Math.PI*fcCycles*t/T;
+      rf.push([t,I*Math.cos(ph)-Q*Math.sin(ph)]);
+      if(i%5===0){const m=Math.hypot(I,Q); e1.push([t,m]); e2.push([t,-m]);}
+    }
+    plot($('cR'),[{pts:rf,color:C.rf,width:1},{pts:e1,color:C.rf,width:1.6,dash:[5,4]},{pts:e2,color:C.rf,width:1.6,dash:[5,4]}],{xmin:0,xmax:T,xstep:0.4});
+
+    // ===== 波形疊合 =====
+    $('n4').value = padN(nums[4],4);
+    if(view==='overlay'){
+      $('bigv').textContent = padN(nums[4],4);
+      $('bigb').textContent = `×100 = ${toInt(nums[4],4)} → ${bitStr[4].match(/.{4}/g).join(' ')} → 子載波 9～11：${X.slice(8).map(x=>cfmt(x[0],x[1])).join('、')}`;
+      const oI=[], oQ=[];
+      for(let i=0;i<=640;i++){const t=T*i/640, v=sB(X,t); oI.push([t,v[0]]); oQ.push([t,v[1]]);}
+      $('m4').value = (cents2/100).toFixed(2);
+      const X2=buildX(inputs2.map(el=>{const v=parseInt(el.value.replace(/\D/g,''),10); return isNaN(v)?0:Math.min(99,v);}).concat([cents2]),[8,8,8,8,12]);
+      const pI=[], pQ=[];
+      for(let i=0;i<=640;i++){const t=T*i/640, v=sB(X2,t); pI.push([t,v[0]]); pQ.push([t,v[1]]);}
+      ovState={rf,e1,e2,oI,oQ,pI,pQ,X,X2,C};
+      drawOverlay();
+      legend($('legO'),[
+        {label:'Wi-Fi 基頻 I(t)（16-QAM + OFDM）',color:C.wifiO},
+        {label:'Wi-Fi 基頻 Q(t)',color:C.wifiO,dash:true},
+        {label:'射頻輸出 x(t)',color:C.rf},
+        {label:'射頻包絡 ±|s(t)|',color:C.rf,dash:true}]);
+      $('statsO').innerHTML = `
+        <div class="stat"><div class="k">包絡峰值 |s|max</div><div class="v">${fmt(peak,2)}</div></div>
+        <div class="stat"><div class="k">發生時間</div><div class="v">${fmt(peakT,2)} μs</div></div>
+        <div class="stat"><div class="k">PAPR</div><div class="v">${fmt(papr,2)} dB</div></div>
+        <div class="stat"><div class="k">總位元／子載波</div><div class="v">44 / 11</div></div>`;
+    }
+
+    // ===== 首頁三張波形 =====
+    if(view==='waveforms'){
+      const hI=[],hQ=[];
+      for(let i=0;i<=800;i++){const t=-CP+(T+CP)*i/800, tt=t<0?t+T:t, v=sB(X,tt); hI.push([t,v[0]]); hQ.push([t,v[1]]);}
+      plot($('cB1'),[{pts:hQ,color:C.wifi,width:1.6,dash:[6,4],alpha:.7},{pts:hI,color:C.wifi,width:2.4}],{xmin:-CP,xmax:T,xstep:0.4,vlines:[0],
+        shade:[{x0:-CP,x1:0,label:'保護區間 CP',color:'color-mix(in srgb, '+C.c[4]+' 14%, transparent)'}]});
+      legend($('legB1'),[{label:'I(t) 同相通道',color:C.wifi},{label:'Q(t) 正交通道',color:C.wifi,dash:true}]);
+      plot($('cR1'),[{pts:rf,color:C.rf,width:1},{pts:e1,color:C.rf,width:1.6,dash:[5,4]},{pts:e2,color:C.rf,width:1.6,dash:[5,4]}],{xmin:0,xmax:T,xstep:0.4});
+      legend($('legR1'),[{label:'x(t) 射頻訊號',color:C.rf},{label:'包絡 ±|s(t)|',color:C.rf,dash:true}]);
+    }
+
+    // decode B: X_k = (1/T)∫ s(t)e^{-j2πkt/T}dt
+    const Mb=512, decB=X.map((_,k)=>{
+      let re=0,im=0;
+      for(let i=0;i<Mb;i++){const t=T*i/Mb,[I,Q]=sB(X,t),ph=-2*Math.PI*(k+1)*t/T,c=Math.cos(ph),s=Math.sin(ph);
+        re+=I*c-Q*s; im+=I*s+Q*c;}
+      return [re/Mb,im/Mb];});
+    const snap=v=>{const opts=[-3,-1,1,3]; return opts.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a);};
+    const rxBits = decB.map(d=>qamInv[snap(d[0])]+qamInv[snap(d[1])]);
+    const rxNums = [0,1,2,3,4].map(i=>{const v=parseInt(rxBits.filter((_,k)=>OWNER[k]===i).join(''),2); return i===4?v/100:v;});
+    $('decB').innerHTML = `<tr><th>子載波 k</th><th>FFT 結果</th><th>判定符號</th><th>還原位元</th><th>還原數字</th><th>結果</th></tr>`+
+      decB.map((d,k)=>{const ni=OWNER[k], first=OWNER.indexOf(ni)===k, span=OWNER.filter(o=>o===ni).length;
+        return `<tr><td>${k+1}</td><td class="mono">${fmt(d[0],3)} ${d[1]<0?'−':'+'} ${fmt(Math.abs(d[1]),3)}j</td>
+        <td class="mono">${cfmt(snap(d[0]),snap(d[1]))}</td><td class="mono">${rxBits[k]}</td>
+        ${first?`<td rowspan="${span}" class="mono" style="color:${C.c[ni]};font-weight:700">${padN(rxNums[ni],ni)}</td><td rowspan="${span}" class="${same(rxNums[ni],nums[ni],ni)?'ok':'bad'}">${same(rxNums[ni],nums[ni],ni)?'✓ 正確':'✗'}</td>`:''}</tr>`;}).join('');
+  }
+
+  // ---------- events ----------
+  inputs2.forEach(el=>{
+    el.addEventListener('input',()=>{el.value=el.value.replace(/\D/g,'').slice(0,2); render();});
+    el.addEventListener('blur',()=>{let v=parseInt(el.value,10); el.value=String(isNaN(v)?0:v).padStart(2,'0'); render();});
+  });
+  $('waveBtn').addEventListener('click',()=>{
+    waveMode=!waveMode; $('waveBtn').textContent = waveMode ? '📶 Signal Mode' : '🌊 Wave Mode';
+    drawOverlay(); startWave();
+  });
+  ['hue','hueU','hueL'].forEach(id=>$(id).addEventListener('input',()=>{setHue(); render();}));
+  ['lo2','hi2'].forEach(id=>{
+    $(id).addEventListener('input',()=>{$(id).value=$(id).value.replace(/[^\d.]/g,'');});
+    $(id).addEventListener('change',()=>{const [lo,hi]=range2(); $('lo2').value=(lo/100).toFixed(2); $('hi2').value=(hi/100).toFixed(2);
+      if(cents2<lo||cents2>hi) cents2=lo; render();});
+  });
+  setHue();
+  inputs.forEach(el=>{
+    el.addEventListener('input',()=>{el.value=el.value.replace(/\D/g,'').slice(0,DIG[inputs.indexOf(el)]); render();});
+    el.addEventListener('blur',()=>{const i=inputs.indexOf(el); el.value=padN(readNums()[i],i); render();});
+  });
+  $('rand').addEventListener('click',()=>{inputs.forEach((el,i)=>el.value=padN(Math.floor(Math.random()*(MAXV[i]+1)),i)); render();});
+  $('reset').addEventListener('click',()=>{['19','87','10','21'].forEach((v,i)=>inputs[i].value=v); render();});
+  ['showQ','showEnv','showCP'].forEach(id=>$(id).addEventListener('change',render));
+  let rt; window.addEventListener('resize',()=>{clearTimeout(rt); rt=setTimeout(render,120);});
+  try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render); }catch(e){}
+  // ---------- 第 5 組自動變動 ----------
+  let timer=null, playing=true;
+  function range2(){
+    const rd=id=>{const v=parseFloat($(id).value); return isNaN(v)?null:Math.max(0,Math.min(4095,Math.round(v*100)));};
+    let lo=rd('lo2'), hi=rd('hi2'); if(lo===null) lo=1; if(hi===null) hi=2399;
+    return lo<=hi?[lo,hi]:[hi,lo];
+  }
+  function tick(){
+    cents = cents>=2399 ? 1 : cents+1;
+    const [lo,hi]=range2();
+    cents2 = (cents2<lo||cents2>=hi) ? lo : cents2+1;
+    render();
+  }
+  function start(){ clearInterval(timer); const v=+$('speed').value; if(v>0) timer=setInterval(tick, 1000/v); }
+  $('play').addEventListener('click',()=>{
+    playing=!playing; $('play').textContent = playing?'⏸ 暫停':'▶ 播放';
+    playing?start():clearInterval(timer);
+  });
+  $('speed').addEventListener('input',()=>{ $('spdn').textContent=$('speed').value; if(playing) start(); });
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden) clearInterval(timer); else if(playing) start(); });
+  start();
+
+  const ctrlEl=document.querySelector('.ctrl'), ctrlHome=document.querySelector('.num.live');
+  function route(){
+    const h=(location.hash||'').slice(1); view = (h==='formulas'||h==='waveforms')?h:'overlay';
+    document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+view));
+    document.body.classList.toggle('ov', view==='overlay');
+    if(view==='overlay') $('ctrlSlot').appendChild(ctrlEl); else ctrlHome.after(ctrlEl);
+    setTimeout(startWave,0);
+    document.querySelectorAll('.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.view===view));
+    render();
+  }
+  window.addEventListener('hashchange',route);
+  route();
+})();
+</script>
+</body>
+</html>
