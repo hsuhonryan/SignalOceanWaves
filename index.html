@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SignalOceanWaves</title>
+<title>Wi-Fi 波形產生器：四組二位數的 OFDM 波形</title>
 <style>
   :root{
     --bg:#000000; --card:#0c0d0e; --ink:#e8e9ea; --muted:#9aa0a6; --line:#25282b;
@@ -71,6 +71,11 @@
   .bigval .v{font-size:2rem;font-weight:800;color:var(--c5);font-family:ui-monospace,Menlo,Consolas,monospace;min-width:5.5ch}
   .bigval .b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;color:var(--muted)}
   .wrap{display:flex;flex-direction:column}
+  .modenote{margin:0 0 14px;padding:10px 14px;border-radius:10px;background:var(--code);color:var(--muted);font-size:.88rem}
+  .modenote b{color:var(--ink)}
+  body.wm .sonly{display:none !important}
+  body:not(.wm) .wonly{display:none !important}
+  body:not(.ov) .num.live, body:not(.ov) #play{display:none !important}
   .en{display:none}
   body.ov .en{display:inline}
   body.ov .zh{display:none}
@@ -124,7 +129,7 @@
 <body>
 <div class="wrap">
   <h1>Wi-Fi 波形產生器</h1>
-  <p class="sub">輸入四組二位數（00–99），第 5 組為自動變動的數值（0.01–23.99），Wi-Fi 波形會隨之即時變化。子載波間距 Δf = 312.5 kHz，一個 OFDM 符號 T = 3.2 μs（802.11a/g/n，20 MHz 頻寬）。</p>
+  <p class="sub">輸入四組二位數（00–99），即時計算對應的 Wi-Fi 波形。子載波間距 Δf = 312.5 kHz，一個 OFDM 符號 T = 3.2 μs（802.11a/g/n，20 MHz 頻寬）。</p>
 
   <div class="card">
     <div class="inputs">
@@ -136,8 +141,8 @@
       <div class="ctrl">
         <button id="play" class="ghost" title="播放／暫停">⏸ 暫停</button>
         <label class="spd"><span class="zh">速度</span><span class="en">Speed</span>
-          <input type="range" id="speed" min="0" max="60" step="1" value="5">
-          <span><b id="spdn">5</b><span class="zh"> 次/秒</span><span class="en"> /s</span></span></label>
+          <input type="range" id="speed" min="0" max="60" step="1" value="2">
+          <span><b id="spdn">2</b><span class="zh"> 次/秒</span><span class="en"> /s</span></span></label>
         <label class="spd ovonly">Color
           <input type="range" id="hue" class="hueBar" min="0" max="380" step="1" value="380">
           <span><i id="sw" class="sw"></i></span></label>
@@ -152,15 +157,10 @@
       <button id="rand">🎲 隨機產生</button>
       <button id="reset" class="ghost">還原 19, 87, 10, 21</button>
       <div class="grp2 ovonly">
-        <div class="num"><label>Cent.</label><input id="m0" inputmode="numeric" maxlength="2"></div>
-        <div class="num"><label>Y.</label><input id="m1" inputmode="numeric" maxlength="2"></div>
-        <div class="num"><label>M.</label><input id="m2" inputmode="numeric" maxlength="2"></div>
-        <div class="num"><label>D.</label><input id="m3" inputmode="numeric" maxlength="2"></div>
-        <div class="num auto2"><label>Auto</label><input id="m4" readonly tabindex="-1" value="0.01"></div>
-        <div class="rng">
-          <label>Max<input id="hi2" inputmode="decimal" maxlength="5" value="23.99"></label>
-          <label>Min<input id="lo2" inputmode="decimal" maxlength="5" value="0.01"></label>
-        </div>
+        <div class="num"><label>Cent.</label><input id="m0" inputmode="numeric" maxlength="2" value="19"></div>
+        <div class="num"><label>Y.</label><input id="m1" inputmode="numeric" maxlength="2" value="87"></div>
+        <div class="num"><label>M.</label><input id="m2" inputmode="numeric" maxlength="2" value="10"></div>
+        <div class="num"><label>D.</label><input id="m3" inputmode="numeric" maxlength="2" value="21"></div>
       </div>
     </div>
     <div class="bits" id="bits"></div>
@@ -186,13 +186,30 @@
   </section>
 
   <section id="v-waveforms" class="view">
-    <div class="card">
+    <p class="modenote wonly">目前為 <b>🌊 Wave Mode</b>（依首頁設定）：以下為海浪模式的波形，與首頁同步流動。到首頁按「Signal Mode」可切換為 16-QAM + OFDM 訊號波形。</p>
+    <p class="modenote sonly">目前為 <b>📶 Signal Mode</b>（依首頁設定）：以下為上方四組數字的 16-QAM + OFDM 訊號波形。</p>
+    <div class="card wonly">
+      <h2>A. 海浪層<span class="tag">左側 Cent. / Y. / M. / D.</span></h2>
+      <p class="desc">每層取一個欄位的 2 個 16-QAM 符號作為第 1、2 子載波；由後到前為 Cent.、Y.、M.、D.，最前層顏色由 Lower 桿決定，背景為 Upper 桿顏色。</p>
+      <canvas class="chart tall" id="cW1"></canvas>
+    </div>
+    <div class="card wonly">
+      <h2>B. 四條線<span class="tag">右側 Cent. / Y. / M. / D.</span></h2>
+      <p class="desc">粗實線 Cent.、細實線 Y.、粗虛線 M.、細虛線 D.；與同編號海浪層同速、同高度流動，顏色由 Color 桿決定。</p>
+      <canvas class="chart tall" id="cW2"></canvas>
+    </div>
+    <div class="card wonly">
+      <h2>C. 射頻輸出<span class="tag">右側 Cent.</span></h2>
+      <p class="desc">取右側 Cent. 的 2 個符號，淺藍帶為包絡 ±A₁|s(t)|，細線為 12.5 MHz 示意載波；與第 1 條線同速流動。</p>
+      <canvas class="chart" id="cW3"></canvas>
+    </div>
+    <div class="card sonly">
       <h2>A. 接近真實 Wi-Fi<span class="tag">16-QAM + OFDM</span></h2>
-      <p class="desc">44 bits 映射成 11 個 16-QAM 符號，經 IFFT 合成的基頻波形；前段灰底為 0.8 μs 保護區間。</p>
+      <p class="desc">32 bits 映射成 8 個 16-QAM 符號，經 IFFT 合成的基頻波形；前段灰底為 0.8 μs 保護區間。</p>
       <div class="legend" id="legB1"></div>
       <canvas class="chart tall" id="cB1"></canvas>
     </div>
-    <div class="card">
+    <div class="card sonly">
       <h2>B. 射頻輸出<span class="tag">天線發射的訊號</span></h2>
       <p class="desc">基頻 I/Q 調變到載波上；虛線為包絡 |s(t)|。載波以 12.5 MHz 示意（實際為 2.4 / 5 GHz）。</p>
       <div class="legend" id="legR1"></div>
@@ -201,11 +218,27 @@
   </section>
 
   <section id="v-formulas" class="view">
+  <p class="modenote wonly">目前為 <b>🌊 Wave Mode</b>（依首頁設定）：以下為海浪模式的計算公式。到首頁按「Signal Mode」可切換為 16-QAM + OFDM 的公式與解調驗證。</p>
+  <p class="modenote sonly">目前為 <b>📶 Signal Mode</b>（依首頁設定）：以下為上方四組數字的 16-QAM + OFDM 計算與解調驗證。</p>
+
+  <div class="card wonly">
+    <h2>海浪模式公式<span class="tag">只取 k = 1、2 子載波</span></h2>
+    <p class="desc">每個欄位 8 bits，依 802.11 格雷碼拆成 2 個 16-QAM 符號（00→−3、01→−1、11→+1、10→+3），當作第 1、2 個子載波；相位隨時間連續旋轉，等同整條波形水平流動。</p>
+    <pre class="f">w(t)   = I₁·cos(ωt) − Q₁·sin(ωt) + I₂·cos(2ωt) − Q₂·sin(2ωt)        ω = 2π/T，T = 3.2 μs
+y(t)   = A · w(t + τ) + d                                           A = 10 / max|w|（波峰縮放到 ±10）
+dτ/dt  = (Speed / 5) · T / D                                        τ 超過 T 歸零（無縫循環）</pre>
+    <h3 style="font-size:1rem;margin:16px 0 6px">四層海浪（左側欄位，從 y(t) 填色到圖底）</h3>
+    <div style="overflow-x:auto"><table id="wLayers"></table></div>
+    <h3 style="font-size:1rem;margin:20px 0 6px">四條線（右側欄位，顏色由 Color 桿決定）</h3>
+    <div style="overflow-x:auto"><table id="wLines"></table></div>
+    <h3 style="font-size:1rem;margin:20px 0 6px">射頻輸出與包絡帶（右側 Cent.）</h3>
+    <pre class="f" id="fRF"></pre>
+  </div>
 
   <!-- B -->
-  <div class="card">
+  <div class="card sonly">
     <h2>A. 接近真實 Wi-Fi<span class="tag">16-QAM + OFDM</span></h2>
-    <p class="desc">四組二位數各轉成 8 bits；第 5 組乘以 100 後（1–2399）轉成 12 bits，合計 44 bits。每 4 bit 依 802.11 格雷碼映射成一個 16-QAM 複數符號 Xₖ = Iₖ + jQₖ（前 2 bit 決定 I，後 2 bit 決定 Q：00→−3、01→−1、11→+1、10→+3），放到第 1～11 個子載波，再以 IFFT 合成。</p>
+    <p class="desc">四組二位數各轉成 8 bits，合計 32 bits。每 4 bit 依 802.11 格雷碼映射成一個 16-QAM 複數符號 Xₖ = Iₖ + jQₖ（前 2 bit 決定 I，後 2 bit 決定 Q：00→−3、01→−1、11→+1、10→+3），放到第 1～8 個子載波，再以 IFFT 合成。</p>
     <div class="row">
       <div>
         <canvas class="const" id="cC"></canvas>
@@ -243,7 +276,7 @@
   const qamInv = {"-3":"00","-1":"01","1":"11","3":"10"};
   const DIG=[2,2,2,2], BITS=[8,8,8,8,12], MAXV=[99,99,99,99];
   const OWNER=[0,0,1,1,2,2,3,3,4,4,4];   // 子載波屬於第幾組（第 5 組佔 3 個）
-  let cents = 1, cents2 = 1;                          // 第 5 組 = cents/100，1 ~ 2399
+  let cents = 1;                          // 第 5 組 = cents/100，1 ~ 2399
   const inputs = [0,1,2,3].map(i=>document.getElementById('n'+i));
   const $ = id=>document.getElementById(id);
 
@@ -371,8 +404,9 @@
   // ---------- render ----------
   let view='overlay';
   const inputs2=[0,1,2,3].map(i=>$('m'+i));
-  (function(){const d=new Date(); const v=[20,d.getFullYear()%100,d.getMonth()+1,d.getDate()];
-    inputs2.forEach((el,i)=>el.value=String(v[i]).padStart(2,'0'));})();
+  (function(){const d=new Date(), v=[20,d.getFullYear()%100,d.getMonth()+1,d.getDate()];
+    inputs2.forEach((el,i)=>el.value=String(v[i]).padStart(2,'0'));})();   // 右側預設：今天日期
+  const read2=()=>inputs2.map(el=>{const v=parseInt(el.value.replace(/\D/g,''),10); return isNaN(v)?0:Math.min(99,v);});
   function hueColor(){const v=+$('hue').value; return v>=360?'#ffffff':`hsl(${v},85%,58%)`;}
   // 上方填色：hsl(h,100%,40.2%)，預設 h=240 即 rgb(0,0,205)；下方填色：hsl(h,100%,25.1%)，預設即 rgb(0,0,128)
   // 青～藍色帶（含白色）：0–20 白→青，20–100 青(180°)→藍(240°)；滑桿最右端 = 預設 rgb(0,0,205) / rgb(0,0,128)
@@ -405,62 +439,113 @@
     return X;
   }
   // ===== 首頁疊合圖（一般模式／海浪模式）=====
-  let ovState=null, waveMode=true, wavePh=[0,0,0,0], lastTs=null, rafId=null;
+  let ovState=null, waveMode=true, wavePh=[0,0,0,0,0], lastTs=null, rafId=null;
   const WAVE1_DUR=8;   // 第一條波形（基頻＋射頻）流動一圈秒數
-  const WAVE_LAYERS=[{dur:10,dy:0,color:'rgba(0, 150, 255, 0.4)'},{dur:7,dy:-6,color:'rgba(0, 120, 220, 0.6)'},{dur:5,dy:-12,color:'rgba(0, 90, 190, 0.9)'}];
+  // 四層海浪：第 i 層取左側第 i 個欄位（Cent./Y./M./D.）的 8 bits → 2 個 16-QAM 符號，當作 k=1、2 子載波
+  const WAVE_LAYERS=[
+    {field:0,dur:10, dy:0,  color:'rgba(0, 150, 255, 0.4)'},
+    {field:1,dur:7.5,dy:-6, color:'rgba(0, 120, 220, 0.6)'},
+    {field:2,dur:5.5,dy:-12,color:'rgba(0, 90, 190, 0.9)'},
+    {field:3,dur:4,  dy:-18,color:'rgba(0, 60, 165, 0.95)'}];
+  const W1=WAVE_LAYERS.length;   // wavePh[W1] = 第一條波形的流動相位
+  // ---- 海浪模式共用計算：左側欄位 → 四層海浪；右側欄位 → 四條線與射頻 ----
+  const LINE_STYLE=[{width:3,dash:[],name:'粗實線'},{width:1.4,dash:[],name:'細實線'},{width:3,dash:[9,6],name:'粗虛線'},{width:1.4,dash:[5,4],name:'細虛線'}];
+  const lowComp=(lx)=>(t)=>{let I=0,Q=0; lx.forEach((x,k)=>{const ph=2*Math.PI*(k+1)*t/T,c=Math.cos(ph),sn=Math.sin(ph);
+    I+=x[0]*c-x[1]*sn; Q+=x[0]*sn+x[1]*c;}); return [I,Q];};
+  const maxAbsI=(sv)=>{let m=0; for(let i=0;i<640;i++) m=Math.max(m,Math.abs(sv(T*i/640)[0])); return m||1;};
+  function waveData(X,XR,w2){
+    const N=320;
+    const layers=WAVE_LAYERS.map((Ly,li)=>{
+      const sv=lowComp(X.slice(2*Ly.field,2*Ly.field+2)), sc=10/maxAbsI(sv), pts=[];
+      for(let i=0;i<=N;i++){const t=T*i/N; pts.push([t, sv(t+wavePh[li])[0]*sc + Ly.dy]);}
+      return {pts,to:'bottom',color: li===WAVE_LAYERS.length-1 ? fillL() : Ly.color};});
+    let bandSc=1, s1=null;
+    const lines=WAVE_LAYERS.map((Ly,li)=>{
+      const sv=lowComp(XR.slice(2*Ly.field,2*Ly.field+2)), sc=10/maxAbsI(sv), pts=[];
+      for(let i=0;i<=N;i++){const t=T*i/N; pts.push([t, sv(t+wavePh[li])[0]*sc + Ly.dy]);}
+      if(li===0){bandSc=sc; s1=sv;}
+      return {pts,color:w2,width:LINE_STYLE[li].width,dash:LINE_STYLE[li].dash,alpha:.95};});
+    const ph1=wavePh[0], wU=[], wL=[], wR=[], NR=2000;
+    for(let i=0;i<=N;i++){const t=T*i/N, v=s1(t+ph1), m=Math.hypot(v[0],v[1])*bandSc; wU.push([t,m]); wL.push([t,-m]);}
+    for(let i=0;i<=NR;i++){const t=T*i/NR, tt=t+ph1, v=s1(tt), c=2*Math.PI*40*tt/T;
+      wR.push([t,(v[0]*Math.cos(c)-v[1]*Math.sin(c))*bandSc]);}
+    return {layers,lines,wU,wL,wR};
+  }
+  const rfFaint=(wR,wU,wL)=>[{pts:wR,color:'rgba(135, 206, 250, 0.2)',width:1},
+    {pts:wU,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]},{pts:wL,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]}];
   function drawOverlay(){
     if(!ovState) return;
-    const {rf,e1,e2,oI,oQ,pI,pQ,X,X2,C}=ovState, w2=hueColor();
-    const top=[
-      {pts:rf,color:'rgba(135, 206, 250, 0.2)',width:1},
-      {pts:e1,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]},{pts:e2,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]}];
-    const first=[{pts:oQ,color:C.wifiO,width:1.8,dash:[6,4],alpha:.8},{pts:oI,color:C.wifiO,width:2.8,alpha:.8}];
+    const {rf,e1,e2,oI,oQ,pI,pQ,X,XR,C}=ovState, w2=hueColor();
+    const first=[{pts:oQ,color:w2,width:1.8,dash:[6,4],alpha:.9},{pts:oI,color:w2,width:2.8,alpha:.95}];
     const opt={xmin:0,xmax:T,xstep:0.4,ymin:-40,ymax:40,ystep:10,xlabel:null,noGrid:true,noZero:true,
       bands:[{upper:e1,lower:e2,color:'rgba(135, 206, 250, 0.8)'}]};
     if(!waveMode){
       opt.fills=[{pts:pI,to:'top',color:fillU()},{pts:pI,to:'bottom',color:fillL()}];
-      plot($('cO'),top.concat([{pts:pQ,color:w2,width:1.6,dash:[6,4],alpha:.85},{pts:pI,color:w2,width:2.4,alpha:.95}],first),opt);
+      plot($('cO'),rfFaint(rf,e1,e2).concat(first),opt);
       return;
     }
-    // 海浪模式：第二條波形只取第 1、2 個子載波（平滑），相位隨時間連續旋轉 = 水平流動；三層不同速度、透明度與高度
-    const lowX=X2.slice(0,2), N=320;
-    const w=(t)=>lowX.reduce((s,x,k)=>{const ph=2*Math.PI*(k+1)*t/T; return s+x[0]*Math.cos(ph)-x[1]*Math.sin(ph);},0);
-    let mx=0; for(let i=0;i<N;i++) mx=Math.max(mx,Math.abs(w(T*i/N)));
-    const sc=10/(mx||1);
-    opt.fills=[{pts:[[0,-40],[T,-40]],to:'top',color:fillU()}].concat(WAVE_LAYERS.map((Ly,li)=>{
-      const pts=[]; for(let i=0;i<=N;i++){const t=T*i/N; pts.push([t, w(t+wavePh[li])*sc + Ly.dy]);}
-      return {pts,to:'bottom',color:Ly.color};}));
-    // 第一條波形也改為海浪模式：取第 1、2 個子載波，基頻 I/Q、射頻與包絡帶一起水平流動
-    const lo1=X.slice(0,2), ph1=wavePh[3];
-    const s1=(t)=>{let I=0,Q=0; lo1.forEach((x,k)=>{const ph=2*Math.PI*(k+1)*t/T,c=Math.cos(ph),sn=Math.sin(ph);
-      I+=x[0]*c-x[1]*sn; Q+=x[0]*sn+x[1]*c;}); return [I,Q];};
-    let m1=0; for(let i=0;i<N;i++){const v=s1(T*i/N); m1=Math.max(m1,Math.hypot(v[0],v[1]));}
-    const k1=12/(m1||1), wI=[], wQ=[], wU=[], wL=[], wR=[], NR=2000;
-    for(let i=0;i<=N;i++){const t=T*i/N, v=s1(t+ph1), m=Math.hypot(v[0],v[1])*k1;
-      wI.push([t,v[0]*k1]); wQ.push([t,v[1]*k1]); wU.push([t,m]); wL.push([t,-m]);}
-    for(let i=0;i<=NR;i++){const t=T*i/NR, tt=t+ph1, v=s1(tt), c=2*Math.PI*40*tt/T;
-      wR.push([t,(v[0]*Math.cos(c)-v[1]*Math.sin(c))*k1]);}
-    opt.bands=[{upper:wU,lower:wL,color:'rgba(135, 206, 250, 0.8)'}];
-    plot($('cO'),[
-      {pts:wR,color:'rgba(135, 206, 250, 0.2)',width:1},
-      {pts:wU,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]},{pts:wL,color:'rgba(135, 206, 250, 0.2)',width:1.6,dash:[5,4]},
-      {pts:wQ,color:C.wifiO,width:1.8,dash:[6,4],alpha:.8},{pts:wI,color:C.wifiO,width:2.8,alpha:.8}],opt);
+    const d=waveData(X,XR,w2);
+    opt.fills=[{pts:[[0,-40],[T,-40]],to:'top',color:fillU()}].concat(d.layers);
+    opt.bands=[{upper:d.wU,lower:d.wL,color:'rgba(135, 206, 250, 0.8)'}];
+    plot($('cO'),rfFaint(d.wR,d.wU,d.wL).concat(d.lines.slice().reverse()),opt);
+  }
+  // ---- 分頁③：海浪模式公式 ----
+  const sgn=(v,first)=> v<0 ? (first?'−':' − ') : (first?'':' + ');
+  function wExpr(x1,x2){
+    const terms=[[x1[0],'cos(ωt)'],[-x1[1],'sin(ωt)'],[x2[0],'cos(2ωt)'],[-x2[1],'sin(2ωt)']];
+    return terms.map(([c,f],i)=>`${sgn(c,i===0)}${Math.abs(c)===1?'':Math.abs(c)+'·'}${f}`).join('');
+  }
+  function waveRows(vals,Xs,kind){
+    const names=['Cent.','Y.','M.','D.'];
+    return WAVE_LAYERS.map((Ly,li)=>{
+      const x1=Xs[2*li], x2=Xs[2*li+1], mx=maxAbsI(lowComp([x1,x2])), bits=vals[li].toString(2).padStart(8,'0');
+      const style = kind==='layer' ? (li===3?'Lower 桿顏色':Ly.color.replace(/\s/g,'')) : LINE_STYLE[li].name;
+      return `<tr><td>${li+1}</td><td>${names[li]}</td><td class="mono" style="font-weight:700">${String(vals[li]).padStart(2,'0')}</td>
+        <td class="mono">${bits.slice(0,4)} ${bits.slice(4)}</td><td class="mono">${cfmt(x1[0],x1[1])}</td><td class="mono">${cfmt(x2[0],x2[1])}</td>
+        <td class="mono" style="text-align:left">${wExpr(x1,x2)}</td><td class="mono">${fmt(mx,2)}</td><td class="mono">${fmt(10/mx,3)}</td>
+        <td class="mono">${Ly.dur} s</td><td class="mono">${Ly.dy}</td><td style="font-size:.8rem">${style}</td></tr>`;}).join('');
+  }
+  function renderWaveFormulas(L,XL,R,XR,C){
+    const head='<tr><th>#</th><th>欄位</th><th>數值</th><th>8 bits</th><th>X₁（k=1）</th><th>X₂（k=2）</th><th>w(t)</th><th>max|w|</th><th>A</th><th>D</th><th>d</th><th>樣式</th></tr>';
+    $('wLayers').innerHTML = head + waveRows(L,XL,'layer');
+    $('wLines').innerHTML  = head + waveRows(R,XR,'line');
+    const x1=XR[0], x2=XR[1], A1=10/maxAbsI(lowComp([x1,x2]));
+    $('fRF').textContent =
+`s(t) = X₁·e^(jωt) + X₂·e^(j2ωt)        X₁ = ${cfmt(x1[0],x1[1])}，X₂ = ${cfmt(x2[0],x2[1])}（右側 Cent. = ${String(R[0]).padStart(2,'0')}）
+
+I(t) = ${wExpr(x1,x2)}
+Q(t) = ${[[x1[0],'sin(ωt)'],[x1[1],'cos(ωt)'],[x2[0],'sin(2ωt)'],[x2[1],'cos(2ωt)']].map(([c,f],i)=>`${sgn(c,i===0)}${Math.abs(c)===1?'':Math.abs(c)+'·'}${f}`).join('')}
+
+包絡帶：  ± A₁ · |s(t + τ₁)|                         A₁ = ${fmt(A1,3)}（與第 1 條線相同）
+射頻線：  A₁ · [ I(t')·cos(ω꜀t') − Q(t')·sin(ω꜀t') ]   t' = t + τ₁，ω꜀ = 2π·40/T（12.5 MHz 示意）`;
+  }
+
+  // ---- 分頁②：海浪模式的三張圖（與首頁同步流動）----
+  let waveSrc=null;
+  function drawWaveOverview(){
+    if(!waveSrc) return;
+    const {X,XR,C}=waveSrc, w2=hueColor(), d=waveData(X,XR,w2);
+    const base={xmin:0,xmax:T,xstep:0.4,ymin:-40,ymax:40,ystep:10};
+    plot($('cW1'),[],Object.assign({},base,{noGrid:true,fills:[{pts:[[0,-40],[T,-40]],to:'top',color:fillU()}].concat(d.layers)}));
+    plot($('cW2'),d.lines.slice().reverse(),base);
+    plot($('cW3'),rfFaint(d.wR,d.wU,d.wL),Object.assign({},base,{ymin:-20,ymax:20,ystep:5,bands:[{upper:d.wU,lower:d.wL,color:'rgba(135, 206, 250, 0.8)'}]}));
   }
   function waveLoop(ts){
     rafId=null;
-    if(!waveMode || view!=='overlay'){lastTs=null; return;}
+    if(!waveMode || (view!=='overlay' && view!=='waveforms')){lastTs=null; return;}
     const dt = lastTs===null?0:Math.min(0.1,(ts-lastTs)/1000); lastTs=ts;
     const f = (+$('speed').value)/5;           // Speed 5 = SVG 原速；0 = 靜止
     WAVE_LAYERS.forEach((Ly,i)=>{ wavePh[i]=(wavePh[i]+dt*f*T/Ly.dur)%T; });
-    wavePh[3]=(wavePh[3]+dt*f*T/WAVE1_DUR)%T;
-    drawOverlay();
+    wavePh[W1]=(wavePh[W1]+dt*f*T/WAVE1_DUR)%T;
+    if(view==='overlay') drawOverlay(); else drawWaveOverview();
     rafId=requestAnimationFrame(waveLoop);
   }
-  function startWave(){ if(waveMode && view==='overlay' && rafId===null){ lastTs=null; rafId=requestAnimationFrame(waveLoop);} }
+  function startWave(){ if(waveMode && (view==='overlay'||view==='waveforms') && rafId===null){ lastTs=null; rafId=requestAnimationFrame(waveLoop);} }
 
   function render(){
     const C = colors();
-    const nums = readNums();
+    const auto = view==='overlay';                 // 第五欄（自動數值）只用在首頁
+    const nums = auto ? readNums() : readNums().slice(0,4);
     const bitStr = nums.map((n,i)=>toInt(n,i).toString(2).padStart(BITS[i],'0'));
     $('bits').innerHTML = nums.map((n,i)=>`<span style="color:${C.c[i]}"><b>${padN(n,i)}</b>${i===4?' ×100 = '+toInt(n,i):''} → ${bitStr[i].match(/.{4}/g).join(' ')}</span>`).join('');
 
@@ -505,7 +590,7 @@
     })();
 
     $('fB').textContent =
-`s(t) = Σ Xₖ · e^(j2π·k·Δf·t)        k = 1 ~ 11
+`s(t) = Σ Xₖ · e^(j2π·k·Δf·t)        k = 1 ~ ${X.length}
 
 I(t) = Re{s(t)} = Σ [ Iₖ·cos(2πkΔf·t) − Qₖ·sin(2πkΔf·t) ]
      = ${X.map((x,k)=>`${x[0]<0?'−':'+'} ${Math.abs(x[0])}cos(${k+1}ωt) ${x[1]<0?'+':'−'} ${Math.abs(x[1])}sin(${k+1}ωt)`).reduce((s,v,i)=>s+(i&&i%4===0?'\n       ':' ')+v,'').trim().replace(/^\+ /,'')}
@@ -556,17 +641,18 @@ Q(t) = Im{s(t)} = Σ [ Iₖ·sin(2πkΔf·t) + Qₖ·cos(2πkΔf·t) ]      （�
     plot($('cR'),[{pts:rf,color:C.rf,width:1},{pts:e1,color:C.rf,width:1.6,dash:[5,4]},{pts:e2,color:C.rf,width:1.6,dash:[5,4]}],{xmin:0,xmax:T,xstep:0.4});
 
     // ===== 波形疊合 =====
-    $('n4').value = padN(nums[4],4);
+    if(auto) $('n4').value = padN(nums[4],4);
     if(view==='overlay'){
       $('bigv').textContent = padN(nums[4],4);
       $('bigb').textContent = `×100 = ${toInt(nums[4],4)} → ${bitStr[4].match(/.{4}/g).join(' ')} → 子載波 9～11：${X.slice(8).map(x=>cfmt(x[0],x[1])).join('、')}`;
-      const oI=[], oQ=[];
-      for(let i=0;i<=640;i++){const t=T*i/640, v=sB(X,t); oI.push([t,v[0]]); oQ.push([t,v[1]]);}
-      $('m4').value = (cents2/100).toFixed(2);
-      const X2=buildX(inputs2.map(el=>{const v=parseInt(el.value.replace(/\D/g,''),10); return isNaN(v)?0:Math.min(99,v);}).concat([cents2]),[8,8,8,8,12]);
+      // 右側欄位 → 藍色線條與射頻；左側欄位 → 海浪／上下填色與 Color 線
+      const XR=buildX(read2().concat([cents]),[8,8,8,8,12]);
+      const oI=[], oQ=[], rR=[], eU=[], eL=[];
+      for(let i=0;i<=640;i++){const t=T*i/640, v=sB(XR,t), m=Math.hypot(v[0],v[1]); oI.push([t,v[0]]); oQ.push([t,v[1]]); eU.push([t,m]); eL.push([t,-m]);}
+      for(let i=0;i<=4000;i++){const t=T*i/4000, v=sB(XR,t), ph=2*Math.PI*40*t/T; rR.push([t,v[0]*Math.cos(ph)-v[1]*Math.sin(ph)]);}
       const pI=[], pQ=[];
-      for(let i=0;i<=640;i++){const t=T*i/640, v=sB(X2,t); pI.push([t,v[0]]); pQ.push([t,v[1]]);}
-      ovState={rf,e1,e2,oI,oQ,pI,pQ,X,X2,C};
+      for(let i=0;i<=640;i++){const t=T*i/640, v=sB(X,t); pI.push([t,v[0]]); pQ.push([t,v[1]]);}
+      ovState={rf:rR,e1:eU,e2:eL,oI,oQ,pI,pQ,X,XR,C};
       drawOverlay();
       legend($('legO'),[
         {label:'Wi-Fi 基頻 I(t)（16-QAM + OFDM）',color:C.wifiO},
@@ -579,6 +665,11 @@ Q(t) = Im{s(t)} = Σ [ Iₖ·sin(2πkΔf·t) + Qₖ·cos(2πkΔf·t) ]      （�
         <div class="stat"><div class="k">PAPR</div><div class="v">${fmt(papr,2)} dB</div></div>
         <div class="stat"><div class="k">總位元／子載波</div><div class="v">44 / 11</div></div>`;
     }
+
+    // ===== 分頁②③ 海浪模式 =====
+    const XR4 = buildX(read2(),[8,8,8,8]);
+    if(view==='waveforms' && waveMode){ waveSrc={X,XR:XR4,C}; drawWaveOverview(); }
+    if(view==='formulas' && waveMode) renderWaveFormulas(nums, X, read2(), XR4, C);
 
     // ===== 首頁三張波形 =====
     if(view==='waveforms'){
@@ -599,7 +690,7 @@ Q(t) = Im{s(t)} = Σ [ Iₖ·sin(2πkΔf·t) + Qₖ·cos(2πkΔf·t) ]      （�
       return [re/Mb,im/Mb];});
     const snap=v=>{const opts=[-3,-1,1,3]; return opts.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a);};
     const rxBits = decB.map(d=>qamInv[snap(d[0])]+qamInv[snap(d[1])]);
-    const rxNums = [0,1,2,3,4].map(i=>{const v=parseInt(rxBits.filter((_,k)=>OWNER[k]===i).join(''),2); return i===4?v/100:v;});
+    const rxNums = nums.map((_,i)=>i).map(i=>{const v=parseInt(rxBits.filter((_,k)=>OWNER[k]===i).join(''),2); return i===4?v/100:v;});
     $('decB').innerHTML = `<tr><th>子載波 k</th><th>FFT 結果</th><th>判定符號</th><th>還原位元</th><th>還原數字</th><th>結果</th></tr>`+
       decB.map((d,k)=>{const ni=OWNER[k], first=OWNER.indexOf(ni)===k, span=OWNER.filter(o=>o===ni).length;
         return `<tr><td>${k+1}</td><td class="mono">${fmt(d[0],3)} ${d[1]<0?'−':'+'} ${fmt(Math.abs(d[1]),3)}j</td>
@@ -614,14 +705,9 @@ Q(t) = Im{s(t)} = Σ [ Iₖ·sin(2πkΔf·t) + Qₖ·cos(2πkΔf·t) ]      （�
   });
   $('waveBtn').addEventListener('click',()=>{
     waveMode=!waveMode; $('waveBtn').textContent = waveMode ? '📶 Signal Mode' : '🌊 Wave Mode';
-    drawOverlay(); startWave();
+    document.body.classList.toggle('wm',waveMode); render(); startWave();
   });
   ['hue','hueU','hueL'].forEach(id=>$(id).addEventListener('input',()=>{setHue(); render();}));
-  ['lo2','hi2'].forEach(id=>{
-    $(id).addEventListener('input',()=>{$(id).value=$(id).value.replace(/[^\d.]/g,'');});
-    $(id).addEventListener('change',()=>{const [lo,hi]=range2(); $('lo2').value=(lo/100).toFixed(2); $('hi2').value=(hi/100).toFixed(2);
-      if(cents2<lo||cents2>hi) cents2=lo; render();});
-  });
   setHue();
   inputs.forEach(el=>{
     el.addEventListener('input',()=>{el.value=el.value.replace(/\D/g,'').slice(0,DIG[inputs.indexOf(el)]); render();});
@@ -634,15 +720,8 @@ Q(t) = Im{s(t)} = Σ [ Iₖ·sin(2πkΔf·t) + Qₖ·cos(2πkΔf·t) ]      （�
   try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render); }catch(e){}
   // ---------- 第 5 組自動變動 ----------
   let timer=null, playing=true;
-  function range2(){
-    const rd=id=>{const v=parseFloat($(id).value); return isNaN(v)?null:Math.max(0,Math.min(4095,Math.round(v*100)));};
-    let lo=rd('lo2'), hi=rd('hi2'); if(lo===null) lo=1; if(hi===null) hi=2399;
-    return lo<=hi?[lo,hi]:[hi,lo];
-  }
   function tick(){
     cents = cents>=2399 ? 1 : cents+1;
-    const [lo,hi]=range2();
-    cents2 = (cents2<lo||cents2>=hi) ? lo : cents2+1;
     render();
   }
   function start(){ clearInterval(timer); const v=+$('speed').value; if(v>0) timer=setInterval(tick, 1000/v); }
@@ -659,6 +738,7 @@ Q(t) = Im{s(t)} = Σ [ Iₖ·sin(2πkΔf·t) + Qₖ·cos(2πkΔf·t) ]      （�
     const h=(location.hash||'').slice(1); view = (h==='formulas'||h==='waveforms')?h:'overlay';
     document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+view));
     document.body.classList.toggle('ov', view==='overlay');
+    document.body.classList.toggle('wm', waveMode);
     if(view==='overlay') $('ctrlSlot').appendChild(ctrlEl); else ctrlHome.after(ctrlEl);
     setTimeout(startWave,0);
     document.querySelectorAll('.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.view===view));
